@@ -28,9 +28,9 @@ class FilterBPMDetector:
         self.thresholdMultiplier = thresholdMultiplier
         self.skip = skip
         self.framesToRead = framesToRead
-        # Add objects as __init__ parameters
-        audioFile = AudioFile()
-        audioFilter = AudioFilter()
+
+        self.audioFile = AudioFile()
+        self.audioFilter = AudioFilter()
 
         self.bufferRefillCount = 0
         self.nextFrame = 0
@@ -38,10 +38,61 @@ class FilterBPMDetector:
         self.peaks = []
         self.distanceHistogram = {}
         self.bpmHistogram = {}
-        self.bpm = -1.0
+        self._bpm = -1.0
         self.threshold = 0.0
-
 
     def computePeaks(self):
         outputBuffer = []
-        audioFile.readNormalizedFrames(inputBuffer, framesToRead)
+        self.audioFile.readNormalizedFrames(self.inputBuffer, self.framesToRead)
+        self.audioFilter.apply(self.inputBuffer, outputBuffer)
+
+        maxVal = 0.0
+        #outputBuffer.foreach(x => if (x> maxVal) maxVal = x)
+        self.threshold = self.thresholdMultiplier*maxVal
+        self.bufferRefillCount += 1
+
+        while self.bufferRefillCount*self.framesToRead < self.audioFile.numFramesToRead:
+            while self.nextFrame < self.bufferRefillCount*self.framesToRead:
+                localIndex = self.nextFrame - (self.bufferRefillCount - 1)*self.framesToRead
+                maxValue = 0.0
+                for i in range(0, self.audioFile.numChannels):
+                    channelValue = outputBuffer[localIndex + i]
+                    if channelValue > maxValue:
+                        maxValue = channelValue
+                if maxValue > self.threshold:
+                    self.peaks += self.nextFrame
+                    self.nextFrame += self.skip
+                else:
+                    self.nextFrame += 1
+            outputBuffer = []
+            self.audioFile.readNormalizedFrames(self.inputBuffer, self.framesToRead)
+            self.bufferRefillCount += 1
+            maxVal = 0.0
+            #outputBuffer.foreach(x => if (x> maxVal) maxVal = x)
+            self.threshold = (self.threshold + self.thresholdMultiplier*maxVal)/2
+
+    def computeDistanceHistogram(self):
+
+    def computeBpmHistogram(self):
+
+
+    def computeBpm(self):
+        maxTempo = 0.0
+        maxCount = 0
+        #bpmHistogram.foreach(p => {
+            #val tempo = p._1
+            #val count = p._2
+            #if (count > maxCount) {
+            #maxTempo = tempo
+            #maxCount = count
+            #}
+        #})
+        self._bpm = maxTempo
+
+    def bpm(self):
+        if self._bpm == -1:
+            self.computePeaks()
+            self.computeDistanceHistogram()
+            self.computeBpmHistogram()
+            self.computeBpm()
+        return self._bpm
